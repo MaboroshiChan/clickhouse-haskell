@@ -21,6 +21,7 @@ import ClickHouseDriver.IO.BufferedWriter
 import ClickHouseDriver.Core.Column
 import Data.Vector (toList)
 import qualified Network.URI.Encode as NE
+import Data.Maybe
 
 -- | Trim JSON data
 extract :: C8.ByteString -> JSONResult
@@ -43,7 +44,8 @@ genURL HttpConnection {
        httpHost = host,
        httpPassword = pw, 
        httpPort = port, 
-       httpUsername = usr} cmd = do
+       httpUsername = usr,
+       httpDatabase = db} cmd = do
          (_,basicUrl) <- runWriterT $ do
            writeIn "http://"
            writeIn usr
@@ -55,6 +57,7 @@ genURL HttpConnection {
            writeIn $ show port   
            writeIn "/"
            if cmd == "ping" then return () else writeIn "?query="
+           writeIn $ dbUrl db
          let res = basicUrl ++ NE.encode cmd
          return res
 
@@ -73,3 +76,6 @@ toStr' (CKArray arr) = "[" ++ (toStr $ toList arr) ++ "]"
 toStr' (CKTuple arr) = "(" ++ (toStr $ toList arr) ++ ")"
 toStr' CKNull = "null"
 toStr' _ = error "unsupported writing type"
+
+dbUrl :: (Maybe String) -> String
+dbUrl = fromMaybe "" . fmap ("?database=" ++)

@@ -121,7 +121,7 @@ fetchData settings fetches = do
         BlockedFetch Ping var' -> ("ping", var')
   e <- Control.Exception.try $ do
     case settings of
-      HttpConnection _ _ _ _ mng -> do
+      HttpConnection _ _ _ _ mng Nothing -> do
         url <- genURL settings queryWithType
         req <- parseRequest url
         ans <- responseBody <$> httpLbs req mng
@@ -152,7 +152,7 @@ getJsonM = mapM getJSON
 exec :: String->Env HttpConnection w->IO (Either C8.ByteString String)
 exec cmd' env = do
   let cmd = C8.pack cmd'
-  let settings@(HttpConnection _ _ _ _ mng) = userEnv env
+  let settings@(HttpConnection _ _ _ _ mng Nothing) = userEnv env
   url <- genURL settings ""
   req <- parseRequest url
   ans <- responseBody <$> httpLbs req{ method = "POST"
@@ -168,7 +168,7 @@ insertOneRow :: String
 insertOneRow table_name arr environment = do
   let row = toString arr
   let cmd = C8.pack ("INSERT INTO " ++ table_name ++ " VALUES " ++ row)
-  let settings@(HttpConnection _ _ _ _ mng) = userEnv environment
+  let settings@(HttpConnection _ _ _ _ mng Nothing) = userEnv environment
   url <- genURL settings ""
   req <- parseRequest url
   ans <- responseBody <$> httpLbs req{ method = "POST"
@@ -186,7 +186,7 @@ insertMany table_name rows environment = do
       comma =  char8 ','
       preset = lazyByteString $ C8.pack $ "INSERT INTO " <> table_name <> " VALUES "
       togo = preset <> (foldl1 (\x y-> x <> comma <> y) rowsString)
-  let settings@(HttpConnection _ _ _ _ mng) = userEnv environment
+  let settings@(HttpConnection _ _ _ _ mng Nothing) = userEnv environment
   url <- genURL settings ""
   req <- parseRequest url
   ans <- responseBody <$> httpLbs req{method = "POST"
@@ -199,7 +199,7 @@ insertMany table_name rows environment = do
 insertFromFile :: String->Format->FilePath->Env HttpConnection w->IO(Either C8.ByteString String)
 insertFromFile table_name format file environment = do
   fileReqBody <- streamFile file
-  let settings@(HttpConnection _ _ _ _ mng) = userEnv environment
+  let settings@(HttpConnection _ _ _ _ mng Nothing) = userEnv environment
   url <- genURL settings ("INSERT INTO " <> table_name 
     <> case format of
           CSV->" FORMAT CSV"

@@ -4,6 +4,7 @@
 
 module ClickHouseDriver.Core.HTTP.Connection (
     httpConnect,
+    httpConnectDb,
     defaultHttpConnection,
     HttpConnection(..),
 ) where
@@ -21,7 +22,8 @@ data HttpConnection
         httpPort :: {-# UNPACK #-}     !Int,
         httpUsername :: {-# UNPACK #-}  !String,
         httpPassword :: {-# UNPACK #-} !String,
-        httpManager ::  {-# UNPACK #-} !Manager
+        httpManager ::  {-# UNPACK #-} !Manager,
+        httpDatabase :: {-# UNPACK #-} !(Maybe String)
       }
 
 defaultHttpConnection :: IO (HttpConnection)
@@ -29,12 +31,18 @@ defaultHttpConnection = httpConnect DEFAULT_USERNAME DEFAULT_PASSWORD 8123 DEFAU
 
 
 httpConnect :: String->String->Int->String->IO(HttpConnection)
-httpConnect user password port host = do
+httpConnect user password port host = 
+  httpConnectDb user password port host Nothing
+
+
+httpConnectDb :: String->String->Int->String->Maybe String->IO(HttpConnection)
+httpConnectDb user password port host database = do
   mng <- newManager defaultManagerSettings
   return HttpConnection {
     httpHost = host,
     httpPassword = password,
     httpPort = port,
     httpUsername = user,
-    httpManager = mng
+    httpManager = mng,
+    httpDatabase = database
   }
