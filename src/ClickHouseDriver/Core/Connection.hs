@@ -50,7 +50,7 @@ import ClickHouseDriver.Core.Types
     ( CKResult(CKResult),
       QueryInfo,
       Packet(EndOfStream, StreamProfileInfo, Progress, Hello,
-             MultiString, Block, queryData),
+             MultiString, Block, queryData, ErrorMessage),
       Context(Context, client_setting, client_info, server_info),
       Interface(HTTP),
       ClientSetting(ClientSetting, strings_encoding, strings_as_bytes,
@@ -245,7 +245,7 @@ tcpConnect host port user password database compression = do
 sendQuery ::TCPConnection-> ByteString -> Maybe ByteString -> IO ()
 sendQuery TCPConnection{context=Context{server_info=Nothing}} _ _ = error "Empty server info"
 sendQuery
-  env@TCPConnection
+  TCPConnection
     { tcpCompression = comp,
       tcpSocket = sock,
       context = Context{
@@ -351,7 +351,7 @@ receiveData ServerInfo {revision = revision} = do
   block <- Block.readBlockInputStream
   return block
 
-receiveResult :: ServerInfo->QueryInfo-> Reader CKResult
+receiveResult :: ServerInfo->QueryInfo-> Reader CKResult --TODO Change to either.
 receiveResult info queryinfo = do
   packets <- packetGen
   let onlyDataPacket = filter isBlock packets
@@ -387,7 +387,7 @@ receivePacket info = do
   -- so here we use number instead. 
   case packet_type of
     1 -> (receiveData info) >>= (return . Block) -- Data
-    2 -> (Error.readException Nothing) >>= (error . show) -- Exception
+    2 -> (Error.readException Nothing) >>= (return . ErrorMessage . show) -- Exception
     3 -> (readProgress $ revision info) >>= (return . Progress) -- Progress
     5 -> return EndOfStream -- End of Stream
     6 -> readBlockStreamProfileInfo >>= (return . StreamProfileInfo) --Profile

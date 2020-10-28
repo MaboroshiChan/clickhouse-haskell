@@ -36,7 +36,8 @@ data HttpParams
         httpHost :: {-# UNPACK #-}     !String,
         httpPort :: {-# UNPACK #-}     !Int,
         httpUsername :: {-# UNPACK #-}  !String,
-        httpPassword :: {-# UNPACK #-} !String 
+        httpPassword :: {-# UNPACK #-} !String,
+        httpDatabase :: {-# UNPACK #-} !(Maybe String)
       }
 
 data HttpConnection
@@ -44,3 +45,4 @@ data HttpConnection
       { httpParams :: ! HttpParams,
         httpManager ::  {-# UNPACK #-} !Manager
       }
+

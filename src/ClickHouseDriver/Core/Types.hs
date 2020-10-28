@@ -215,6 +215,7 @@ data Packet
   | Progress {prog :: Progress}
   | StreamProfileInfo {profile :: BlockStreamProfileInfo}
   | MultiString (ByteString, ByteString)
+  | ErrorMessage String
   | Hello
   | EndOfStream
   deriving (Show)

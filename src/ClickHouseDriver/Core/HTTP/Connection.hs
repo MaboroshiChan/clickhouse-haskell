@@ -11,7 +11,8 @@ module ClickHouseDriver.Core.HTTP.Connection (
     httpConnect,
     defaultHttpConnection,
     HttpConnection(..),
-    createHttpPool
+    createHttpPool,
+    httpConnectDb
 ) where
                                 
 import Network.HTTP.Client
@@ -19,7 +20,7 @@ import Network.HTTP.Client
 import ClickHouseDriver.Core.HTTP.Types
     ( HttpConnection(..),
       HttpParams(HttpParams, httpUsername, httpPort, httpPassword,
-                 httpHost) ) 
+                 httpHost, httpDatabase) ) 
 import Data.Default.Class ( Default(..) )
 import Data.Pool ( createPool, Pool )
 import Data.Time.Clock ( NominalDiffTime )
@@ -37,7 +38,8 @@ instance Default HttpParams where
      httpHost = DEFAULT_HOST_NAME,
      httpPassword = DEFAULT_PASSWORD,
      httpPort = 8123,
-     httpUsername = DEFAULT_USERNAME
+     httpUsername = DEFAULT_USERNAME,
+     httpDatabase = Nothing
   }
 
 createHttpPool :: HttpParams
@@ -49,14 +51,15 @@ createHttpPool HttpParams{
                 httpHost=host,
                 httpPassword = password,
                 httpPort = port,
-                httpUsername = user
+                httpUsername = user,
+                httpDatabase = db
               } 
                numStripes 
                idleTime 
                maxResources 
   = createPool(
       do
-        conn <- httpConnect user password port host
+        conn <- httpConnectDb user password port host db
         return conn
   )(\HttpConnection{httpManager=mng}->return ())
   numStripes 
@@ -64,14 +67,20 @@ createHttpPool HttpParams{
   maxResources 
 
 httpConnect :: String->String->Int->String->IO(HttpConnection)
-httpConnect user password port host = do
+httpConnect user password port host = 
+  httpConnectDb user password port host Nothing
+
+
+httpConnectDb :: String->String->Int->String->Maybe String->IO(HttpConnection)
+httpConnectDb user password port host database = do
   mng <- newManager defaultManagerSettings
   return HttpConnection {
     httpParams = HttpParams {
       httpHost = host,
       httpPassword = password,
       httpPort = port,
-      httpUsername = user
+      httpUsername = user,
+      httpDatabase = database
     },
-    httpManager = mng
+      httpManager = mng
   }

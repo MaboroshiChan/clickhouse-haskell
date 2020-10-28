@@ -41,7 +41,7 @@ import ClickHouseDriver.Core.Defines as Defines
     ( _DEFAULT_HTTP_PORT, _DEFAULT_HOST )
 import ClickHouseDriver.Core.HTTP.Connection
     ( defaultHttpConnection,
-      httpConnect, createHttpPool )
+      createHttpPool, httpConnectDb)
 import ClickHouseDriver.Core.HTTP.Helpers
     ( extract, genURL, toString )
 import ClickHouseDriver.Core.HTTP.Types ( Format(..), JSONResult, HttpConnection(..))
@@ -267,7 +267,7 @@ defaultHttpPool numStripes idleTime maxResources
   = liftIO $ createHttpPool def numStripes idleTime maxResources >>= setupEnv
 
 httpClient :: (MonadIO m)=> String->String-> m(Env HttpConnection w)
-httpClient user password = liftIO $ httpConnect user password Defines._DEFAULT_HTTP_PORT Defines._DEFAULT_HOST >>= setupEnv
+httpClient user password = liftIO $ httpConnectDb user password Defines._DEFAULT_HTTP_PORT Defines._DEFAULT_HOST Nothing >>= setupEnv
 
 -- | rename runHaxl function.
 {-# INLINE runQuery #-}
