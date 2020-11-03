@@ -52,7 +52,9 @@ benchmark1 = do
     conn <- createClient params{password'="12345612341"}
     start <- getCurrentTime
     q <- query conn "SELECT * FROM customer LIMIT 10000"
-    Col.putStrLn q
+    case q of
+        Left e->putStrLn e
+        Right r -> Col.putStrLn r
     putStrLn "success!"
     end <- getCurrentTime
     print $ diffUTCTime end start
@@ -245,7 +247,7 @@ insertTest5 = do
 insertTest6 = do
     conn <- defaultClient
     q <- query conn "SELECT * FROM UUID_test" 
-    Col.putStrLn q
+    print q
     closeClient conn
 
 insertTest7 = do
@@ -261,11 +263,11 @@ pingTest = do
     conn <- defaultClient
     ping conn 
 
-queryTests :: GenHaxl u w (V.Vector (V.Vector ClickhouseType))
+queryTests :: GenHaxl u w (String)
 queryTests = do
     one <- fetch "SELECT * FROM UUID_test"
     two <- fetch "SELECT * FROM array_t"
     three <- fetch "SHOW DATABASES"
     four <- fetch "SHOW TABLES"
-    return $ V.concat [one, two ,three, four]
+    return $ show one ++ show two ++ show three ++ show four
 

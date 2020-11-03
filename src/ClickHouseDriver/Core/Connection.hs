@@ -94,7 +94,7 @@ import           Network.Socket                             (Socket)
 import           System.Timeout                             (timeout)
 --Debug
 
---import Debug.Trace (trace)
+import Debug.Trace (trace)
 -- | This module mainly focuses how to make connection
 -- | to clickhouse database and protocols to send and receive data
 
@@ -385,6 +385,7 @@ receiveResult info query_info = do
       packet <- receivePacket info
       case packet of
         EndOfStream -> return []
+        error@(ErrorMessage _) -> return [error]
         _ -> do
           next <- packetGen
           return (packet : next)
@@ -393,7 +394,7 @@ receivePacket :: ServerInfo->Reader Packet
 receivePacket info = do
   packet_type <- readVarInt
   -- The pattern matching does not support match with variable name,
-  -- so here we use number instead. 
+  -- so here we use number instead.
   case packet_type of
     1 -> (receiveData info) >>= (return . Block) -- Data
     2 -> (Error.readException Nothing) >>= (return . ErrorMessage . show) -- Exception
