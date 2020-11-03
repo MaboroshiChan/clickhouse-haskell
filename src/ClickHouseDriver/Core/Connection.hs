@@ -351,13 +351,18 @@ receiveData ServerInfo {revision = revision} = do
   block <- Block.readBlockInputStream
   return block
 
-receiveResult :: ServerInfo->QueryInfo-> Reader CKResult --TODO Change to either.
-receiveResult info queryinfo = do
+receiveResult :: ServerInfo->QueryInfo->Reader (Either String CKResult) --TODO Change to either.
+receiveResult info query_info = do
   packets <- packetGen
   let onlyDataPacket = filter isBlock packets
-      dataVectors = (ClickHouseDriver.Core.Column.transpose . Block.cdata . queryData) <$> onlyDataPacket
-      newQueryInfo = Prelude.foldl updateQueryInfo queryinfo packets
-  return $ CKResult (V.concat dataVectors) newQueryInfo
+  let errors = (\(ErrorMessage str)->str) <$> filter isError packets
+  case errors of
+    []->do 
+      let dataVectors = (ClickHouseDriver.Core.Column.transpose . Block.cdata . queryData) <$> onlyDataPacket
+      let newQueryInfo = Prelude.foldl updateQueryInfo query_info packets
+      return $ Right $ CKResult (V.concat dataVectors) newQueryInfo
+    xs->do
+      return $ Left $ Prelude.concat xs
   where
     updateQueryInfo :: QueryInfo->Packet->QueryInfo
     updateQueryInfo q (Progress prog) 
@@ -365,6 +370,10 @@ receiveResult info queryinfo = do
     updateQueryInfo q (StreamProfileInfo profile) 
       = storeProfile q profile
     updateQueryInfo q _ = q
+
+    isError :: Packet->Bool
+    isError (ErrorMessage _) = True
+    isError _ = False
 
     isBlock :: Packet -> Bool
     isBlock Block {queryData=Block.ColumnOrientedBlock{cdata=d}} 
@@ -383,7 +392,7 @@ receiveResult info queryinfo = do
 receivePacket :: ServerInfo->Reader Packet
 receivePacket info = do
   packet_type <- readVarInt
-  -- The pattern mactching does not support match with variable name,
+  -- The pattern matching does not support match with variable name,
   -- so here we use number instead. 
   case packet_type of
     1 -> (receiveData info) >>= (return . Block) -- Data
@@ -394,7 +403,7 @@ receivePacket info = do
     7 -> (receiveData info) >>= (return . Block) -- Total
     8 -> (receiveData info) >>= (return . Block) -- Extreme
           -- 10 -> return undefined -- Log
-    11 -> do -- MutiStrings message
+    11 -> do -- MultiStrings message
       first <- readBinaryStr
       second <- readBinaryStr
       return $ MultiString (first, second)

@@ -120,7 +120,7 @@ _DEFAULT_COMPRESSION_SETTING =  False
 data Query a where
   FetchData :: String
                -- ^ SQL statement such as "SELECT * FROM table"
-             ->Query (CKResult)
+             ->Query (Either String CKResult)
                -- ^ result data in Haskell type and additional information
 
 deriving instance Show (Query a)
@@ -168,7 +168,7 @@ fetchData (CKResource tcpconn)  fetch = do
   either
     (putFailure var)
     (putSuccess var)
-    (e :: Either SomeException (CKResult))
+    (e :: Either SomeException (Either String CKResult))
 fetchData (CKPool pool) fetch = do
   let (queryStr, var) = case fetch of
         BlockedFetch (FetchData q) var' -> (C8.pack q, var')
@@ -186,7 +186,7 @@ fetchData (CKPool pool) fetch = do
   either
     (putFailure var)
     (putSuccess var)
-    (e :: Either SomeException (CKResult))
+    (e :: Either SomeException (Either String CKResult))
 
 deploySettings :: TCPConnection -> IO (Env () w)
 deploySettings tcp =
@@ -247,20 +247,22 @@ instance Resource (Pool TCPConnection) where
   client (Right src) = initEnv (stateSet (CKPool src) stateEmpty) ()
 
 -- | fetch data alone with query information
-fetchWithInfo :: String->GenHaxl u w CKResult
+fetchWithInfo :: String->GenHaxl u w (Either String CKResult)
 fetchWithInfo = dataFetch . FetchData
 
 -- | fetch data only
-fetch :: String->GenHaxl u w (Vector (Vector ClickhouseType))
+fetch :: String->GenHaxl u w (Either String (Vector (Vector ClickhouseType)))
 fetch str = do
   result_with_info <- fetchWithInfo str
-  return $ query_result result_with_info
+  case result_with_info of
+    Right CKResult{query_result=r}->return $ Right r
+    Left err -> return $ Left err
 
 -- | query result contains query information.
-queryWithInfo :: String->Env () w->IO (CKResult)
+queryWithInfo :: String->Env () w->IO (Either String CKResult)
 queryWithInfo query source = runHaxl source (executeQuery query)
   where
-    executeQuery :: String->GenHaxl u w CKResult
+    executeQuery :: String->GenHaxl u w (Either String CKResult)
     executeQuery = dataFetch . FetchData
 
 -- | query command
@@ -268,10 +270,12 @@ query :: Env () w
         -- ^ Haxl environment for connection
        ->String
         -- ^ Query command for "SELECT" and "SHOW" only
-       ->IO (Vector (Vector ClickhouseType))
+       ->IO (Either String (Vector (Vector ClickhouseType)))
 query source cmd = do
-  CKResult{query_result=r} <- queryWithInfo cmd source
-  return r
+  query_with_info <- queryWithInfo cmd source
+  case query_with_info of
+    Right CKResult{query_result=r}->return $ Right r
+    Left err->return $ Left err
 
 -- | for general use e.g. creating table,
 -- | multiple queries, multiple insertions. 
@@ -282,7 +286,7 @@ withQuery :: Env () w
             -- ^ enviroment i.e. the database resource
            ->String
            -- ^ sql statement
-           ->(Vector (Vector ClickhouseType)->IO a)
+           ->(Either String (Vector (Vector ClickhouseType))->IO a)
            -- ^ callback function that returns type a
            ->IO a
            -- ^ type a wrapped in IO monad.
