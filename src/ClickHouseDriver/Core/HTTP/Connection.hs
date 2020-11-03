@@ -4,85 +4,74 @@
 -- This source code is distributed under the terms of a MIT license,
 -- found in the LICENSE file.
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE CPP  #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module ClickHouseDriver.Core.HTTP.Helpers
-  ( extract,
-    genURL,
-    toString
-  )
-where
+module ClickHouseDriver.Core.HTTP.Connection (
+    httpConnect,
+    defaultHttpConnection,
+    HttpConnection(..),
+    createHttpPool
+) where
+                                
+import Network.HTTP.Client
+    ( defaultManagerSettings, newManager)
+import ClickHouseDriver.Core.HTTP.Types
+    ( HttpConnection(..),
+      HttpParams(HttpParams, httpUsername, httpPort, httpPassword,
+                 httpHost) ) 
+import Data.Default.Class ( Default(..) )
+import Data.Pool ( createPool, Pool )
+import Data.Time.Clock ( NominalDiffTime )
 
-import ClickHouseDriver.Core.Column
-    ( ClickhouseType(CKNull, CKTuple, CKArray, CKString, CKInt32) )
-import ClickHouseDriver.Core.HTTP.Connection
-    ( HttpConnection(HttpConnection, httpParams) )
-import ClickHouseDriver.Core.HTTP.Types ( Cmd, JSONResult, HttpParams(..))
-import ClickHouseDriver.IO.BufferedWriter ( writeIn )
-import Control.Monad.Writer ( WriterT(runWriterT) )
-import qualified Data.Aeson                            as JP
-import Data.Attoparsec.ByteString ( IResult(Done, Fail), parse )
-import qualified Data.ByteString.Char8                 as C8
-import qualified Data.HashMap.Strict                   as HM
-import           Data.Text                             (pack)
-import           Data.Vector                           (toList)
-import qualified Network.URI.Encode                    as NE
+#define DEFAULT_USERNAME  "default"
+#define DEFAULT_HOST_NAME "localhost"
+#define DEFAULT_PASSWORD  ""
+--TODO change default password to ""
 
+defaultHttpConnection :: IO (HttpConnection)
+defaultHttpConnection = httpConnect DEFAULT_USERNAME DEFAULT_PASSWORD 8123 DEFAULT_HOST_NAME
 
--- | Trim JSON data
-extract :: C8.ByteString -> JSONResult
-extract val = getData $ parse JP.json val
-  where
-    getData (Fail e _ _)           = Left e
-    getData (Done _ (JP.Object x)) = Right $ getData' x
-    getData _                      = Right []
+instance Default HttpParams where
+  def = HttpParams{
+     httpHost = DEFAULT_HOST_NAME,
+     httpPassword = DEFAULT_PASSWORD,
+     httpPort = 8123,
+     httpUsername = DEFAULT_USERNAME
+  }
 
-    getData' = map getObject . maybeArrToList . HM.lookup (pack "data")
+createHttpPool :: HttpParams
+                ->Int
+                ->NominalDiffTime
+                ->Int
+                ->IO(Pool HttpConnection)
+createHttpPool HttpParams{
+                httpHost=host,
+                httpPassword = password,
+                httpPort = port,
+                httpUsername = user
+              } 
+               numStripes 
+               idleTime 
+               maxResources 
+  = createPool(
+      do
+        conn <- httpConnect user password port host
+        return conn
+  )(\HttpConnection{httpManager=mng}->return ())
+  numStripes 
+  idleTime 
+  maxResources 
 
-    maybeArrToList Nothing = []
-    maybeArrToList (Just x) = toList . getArray $ x
-
-    getArray (JP.Array arr) = arr
-    getObject (JP.Object x) = x
-
-genURL :: HttpConnection->Cmd->IO String
-genURL HttpConnection {
-        httpParams = HttpParams{
-            httpHost = host,
-            httpPassword = pw, 
-            httpPort = port, 
-            httpUsername = usr
-        }
-       }
-         cmd = do
-         (_,basicUrl) <- runWriterT $ do
-           writeIn "http://"
-           writeIn usr
-           writeIn ":"
-           writeIn pw
-           writeIn "@"
-           writeIn host
-           writeIn ":"
-           writeIn $ show port   
-           writeIn "/"
-           if cmd == "ping" then return () else writeIn "?query="
-         let res = basicUrl ++ NE.encode cmd
-         return res
-
--- | serialize column type into sql string
-toString :: [ClickhouseType]->String
-toString ck = "(" ++ toStr ck ++ ")"
-
-toStr :: [ClickhouseType]->String
-toStr [] = ""
-toStr (x:[]) = toStr' x
-toStr (x:xs) = toStr' x ++ "," ++ toStr xs
-
-toStr' :: ClickhouseType->String
-toStr' (CKInt32 n) = show n
-toStr' (CKString str) = "'" ++ C8.unpack str ++ "'"
-toStr' (CKArray arr) = "[" ++ (toStr $ toList arr) ++ "]"
-toStr' (CKTuple arr) = "(" ++ (toStr $ toList arr) ++ ")"
-toStr' CKNull = "null"
-toStr' _ = error "unsupported writing type"
+httpConnect :: String->String->Int->String->IO(HttpConnection)
+httpConnect user password port host = do
+  mng <- newManager defaultManagerSettings
+  return HttpConnection {
+    httpParams = HttpParams {
+      httpHost = host,
+      httpPassword = password,
+      httpPort = port,
+      httpUsername = user
+    },
+    httpManager = mng
+  }
