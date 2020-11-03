@@ -9,6 +9,7 @@
 
 module ClickHouseDriver.Core.HTTP.Connection (
     httpConnect,
+    httpConnectDb,
     defaultHttpConnection,
     HttpConnection(..),
     createHttpPool,

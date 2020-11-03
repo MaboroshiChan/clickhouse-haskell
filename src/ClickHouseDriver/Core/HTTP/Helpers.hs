@@ -30,7 +30,6 @@ import           Data.Vector                           (toList)
 import qualified Network.URI.Encode                    as NE
 import Data.Maybe ( fromMaybe )
 
-
 -- | Trim JSON data
 extract :: C8.ByteString -> JSONResult
 extract val = getData $ parse JP.json val
